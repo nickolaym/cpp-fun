@@ -32,25 +32,25 @@ struct remapper {
 
   // the end of the recursion: all types are leading, nothing to run about.
   template<class... Ls>
-  struct  tree<std::tuple<Ls...>, std::tuple<>, std::tuple<>>
-      :  leaf<Ls...>
+  struct  tree<std::tuple<Ls...>, std::tuple<>, std::tuple<>>:
+          leaf<Ls...>
   {
     using leaf<Ls...>::operator();
   };
 
   // the end of the recursion on given RT: obviously use the rest type and go down
   template<class... Ls, class... Ms, class R>
-  struct  tree<std::tuple<Ls...>, std::tuple<Ms...>, std::tuple<R>>
-      :  tree<std::tuple<Ls..., R>, std::tuple<>, std::tuple<Ms...>>
+  struct  tree<std::tuple<Ls...>, std::tuple<Ms...>, std::tuple<R>>:
+          tree<std::tuple<Ls..., R>, std::tuple<>, std::tuple<Ms...>>
   {
     using tree<std::tuple<Ls..., R>, std::tuple<>, std::tuple<Ms...>>::operator();
   };
 
   // recursion on given RT: either accept the first type and go down, or reject and go right
   template<class... Ls, class... Ms, class R, class... Rs>
-  struct  tree<std::tuple<Ls...>, std::tuple<Ms...>, std::tuple<R, Rs...>>
-      :  tree<std::tuple<Ls..., R>, std::tuple<>, std::tuple<Ms..., Rs...>>
-          ,  tree<std::tuple<Ls...>, std::tuple<Ms..., R>, std::tuple<Rs...>>
+  struct  tree<std::tuple<Ls...>, std::tuple<Ms...>, std::tuple<R, Rs...>>:
+          tree<std::tuple<Ls..., R>, std::tuple<>, std::tuple<Ms..., Rs...>>,
+          tree<std::tuple<Ls...>, std::tuple<Ms..., R>, std::tuple<Rs...>>
   {
     using tree<std::tuple<Ls..., R>, std::tuple<>, std::tuple<Ms..., Rs...>>::operator();
     using tree<std::tuple<Ls...>, std::tuple<Ms..., R>, std::tuple<Rs...>>::operator();
@@ -58,10 +58,10 @@ struct remapper {
 
   using all_permutations = tree<std::tuple<>, std::tuple<>, std::tuple<Ts...>>;
 
-    template<class... Args>
-    auto operator()(Fun fun, Args&&... args) const {
-      return all_permutations{}(fun, FWD(args)...);
-    }
+  template<class... Args>
+  auto operator()(Fun fun, Args&&... args) const {
+    return all_permutations{}(fun, FWD(args)...);
+  }
 };
 
 template<class R, class... Args>
