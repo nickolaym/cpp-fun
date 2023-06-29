@@ -68,6 +68,7 @@ int fun(prio<5>, const char*) { return __LINE__; }
 int fun(prio<10>, int&) { return __LINE__; }
 int fun(prio<10>) { return __LINE__; }  // перегрузка с другим количеством аргументов
 
+int fun(prio<20>, short) { return __LINE__; }
 int fun(prio<20>, short&) { return __LINE__; }
 int fun(prio<20>, long&) { return __LINE__; }
 
@@ -90,4 +91,6 @@ int main() {
     float z;
     TEST(do_fun(z));
     TEST(do_fun(1, 2));
+    short t;
+    TEST(do_fun(t));
 }
