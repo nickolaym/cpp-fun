@@ -60,8 +60,10 @@ requires (decltype(details::find_prio(f, FWD(xs)...))::value != prio_error) {
 // пример кода
 
 using overloads::prio;
-int fun(prio<0>, int) { return __LINE__; }
-int fun(prio<0>, const char*) { return __LINE__; }
+int fun(prio<0>, auto&&...) { return __LINE__; }
+
+int fun(prio<5>, int) { return __LINE__; }
+int fun(prio<5>, const char*) { return __LINE__; }
 
 int fun(prio<10>, int&) { return __LINE__; }
 int fun(prio<10>) { return __LINE__; }  // перегрузка с другим количеством аргументов
