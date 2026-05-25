@@ -24,3 +24,4 @@ endfunction()
 
 
 add_test_executable(test_compose single-files/compose.cpp)
+add_test_executable(test_criteria_from_conctpt single-files/criteria_from_concept.cpp)
