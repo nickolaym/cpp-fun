@@ -1,8 +1,24 @@
 #include "compose.h"
 #include <gtest/gtest.h>
 
-TEST(alternatives, no_funs) {
+TEST(alternatives, no_fallback) {
     constexpr auto f = carry_simple_alternatives();
+
+    int x = 123;
+
+    constexpr auto res = alt_helpers::run_alternatives<AcceptAll>{}.get_resolver(x);
+    static_assert(!res.value);
+
+    // requires failure is not an error in template context only!
+    // (must depend on template params)
+    [&](auto y){
+        static_assert(!requires{res(y);});
+        static_assert(!requires{f(y);});
+    }(x);
+}
+
+TEST(alternatives, no_funs) {
+    constexpr auto f = carry_simple_alternatives(fallback_alternative);
 
     int x = 123;
 
@@ -17,7 +33,10 @@ TEST(alternatives, no_funs) {
 }
 
 TEST(alternatives, no_appropriate_fun) {
-    constexpr auto f = carry_simple_alternatives([]{}, [](int, int){}, [](int*){});
+    constexpr auto f = carry_simple_alternatives(
+        []{}, [](int, int){}, [](int*){},
+        fallback_alternative
+    );
 
     int x = 123;
 
@@ -95,4 +114,30 @@ TEST(alternatives, appropriate_fun_distinct_inputs) {
     static_assert(std::is_same_v< decltype(f(+x)), int* >);
     static_assert(std::is_same_v< decltype(f(x)), int** >);
     static_assert(std::is_same_v< decltype(f(std::as_const(x))), int*** >);
+}
+
+template<int n> using int_tag = std::integral_constant<int, n>;
+
+template<int n> auto make_echo() { return [](int_tag<n>) { return int_tag<-n>{}; }; }
+
+TEST(alternatives, association) {
+    const auto f = carry_simple_alternatives(
+        make_echo<1>(),
+        make_echo<2>(),
+        carry_simple_alternatives(
+            make_echo<3>(),
+            make_echo<4>()
+        ),
+        make_echo<5>()
+    );
+
+    static_assert(f(int_tag<1>{}) == int_tag<-1>{});
+    static_assert(f(int_tag<2>{}) == int_tag<-2>{});
+    static_assert(f(int_tag<3>{}) == int_tag<-3>{});
+    static_assert(f(int_tag<4>{}) == int_tag<-4>{});
+    static_assert(f(int_tag<5>{}) == int_tag<-5>{});
+
+    [&](auto t){
+        static_assert(!requires{ f(t); });
+    }(int_tag<0>{});
 }
