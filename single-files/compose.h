@@ -14,23 +14,38 @@
 
 #define CRITERIA template<class>class
 
+// дефолтный критерий остановки "подходит всё" (для альтернатив)
+template<class>using AcceptAll = std::true_type;
+// дефолтный критерий остановки "не подходит ничего" (для цепочки)
+template<class>using RejectAll = std::false_type;
+
+// фабрика критериев
+template<class Dst> struct accepts {
+    template<class T> using criteria = std::is_same<T, Dst>;
+};
+
+// концепт, проверяющий критерий
 template<class T, CRITERIA C>
 concept fits_criteria = C<T>::value;
 
-template<class F, CRITERIA C, class A>
-concept appropriate_function = fits_criteria<std::invoke_result_t<F, A>, C>;
-// 1) can invoke - invoke_result_t is instantiated
-// 2) the result fits given criteria
-
-template<class F, CRITERIA C, class A>
-concept inappropriate_function = !appropriate_function<F, C, A>;
-
-
-template<class...> struct typelist {};
+template<class T, CRITERIA C>
+concept not_fits_criteria = !C<T>::value;
 
 // композиция "перебор альтернатив до первой подходящей функции"
+// (которую можно вызвать с данным аргументом и чей результат подходит под критерий остановки)
 
 namespace alt_helpers {
+
+template<class F, CRITERIA C, class A>
+concept appropriate_alternative = fits_criteria<std::invoke_result_t<F, A>, C>;
+// 1) можно вызвать
+// 2) и результат подходит под критерий остановки
+
+template<class F, CRITERIA C, class A>
+concept inappropriate_alternative = !appropriate_alternative<F, C, A>;
+// или нельзя вызвать, или результат неподходящий
+
+template<class...> struct typelist {};
 
 // resolver<...>{}(arg, f1, f2, ..., fk, ..., fn)
 // вызывает первую подходящую функцию из f1...fn (скажем, fk)
@@ -49,7 +64,7 @@ struct resolver<C, A, typelist<Rs...>> // нет больше функций
     // constexpr A operator()(A a, Rs...) const { return a; }
 };
 
-template<CRITERIA C, class A, class... Rs, appropriate_function<C, A> F, class... Gs>
+template<CRITERIA C, class A, class... Rs, appropriate_alternative<C, A> F, class... Gs>
 struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
 : std::true_type
 {
@@ -58,7 +73,7 @@ struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
     }
 };
 
-template<CRITERIA C, class A, class... Rs, inappropriate_function<C, A> F, class... Gs>
+template<CRITERIA C, class A, class... Rs, inappropriate_alternative<C, A> F, class... Gs>
 struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
 : resolver<C, A, typelist<Rs..., F>, Gs...> {};
 
@@ -87,13 +102,112 @@ template<CRITERIA C> constexpr auto carry_alternatives = [](auto... fs) {
     RETURN_IF_RESOLVED( (run_alternatives<C>(FWD(a), fs...)) );
 };
 
-template<class>using AcceptAll = std::true_type;
-
 constexpr auto run_simple_alternatives = run_alternatives<AcceptAll>;
 constexpr auto carry_simple_alternatives = carry_alternatives<AcceptAll>;
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// выполнение цепочки
+
 namespace seq_helpers {
 
-}
+// если аргумент удовлетворяет критерию остановки, то останавливаемся
+template<class T, CRITERIA C>
+concept stopping_arg = fits_criteria<std::remove_cvref_t<T>, C>;
+
+// если не удовлетворяет - пытаемся продолжить
+template<class T, CRITERIA C>
+concept running_arg = not_fits_criteria<std::remove_cvref_t<T>, C>;
+
+// неподходящий шаг
+template<class F, class A>
+concept inappropriate_step = !std::invocable<F, A>;
+
+// подходящий шаг
+template<class F, class A>
+concept appropriate_step = std::invocable<F, A>;
+
+// остановка сразу после шага
+template<class F, CRITERIA C, class A>
+concept stopping_step = stopping_arg<std::invoke_result_t<F, A>, C>;
+
+// первый шаг подходит и проходит дальше
+template<class F, CRITERIA C, class A>
+concept running_step = running_arg<std::invoke_result_t<F, A>, C>;
+
+template<CRITERIA C>
+struct run_sequence {
+    decltype(auto) operator()(auto&& arg, auto&&... fs) const {
+        return run<decltype(arg)>(FWD(arg), FWD(fs)...);
+    }
+
+    // тип Arg может быть ссылкой или значением
+    // и выводится
+    // - при запуске - из универсальной ссылки на аргумент
+    // - при продолжении - из результата функции
+
+    // остановка на аргументе
+    template<class Arg>
+    Arg run(stopping_arg<C> auto&& arg, auto&&... fs) const
+    { return FWD(arg); }
+
+    template<class Arg>
+    Arg run(running_arg<C> auto&& arg) const
+    { return FWD(arg); }
+
+    template<class Arg>
+    Arg run(
+        running_arg<C> auto&& arg,
+        inappropriate_step<decltype(arg)> auto&& f,
+        auto&&... fs
+    ) const
+    { return FWD(arg); }
+
+    // остановка на первой функции
+    template<class>
+    decltype(auto) run(
+        running_arg<C> auto&& arg,
+        stopping_step<C, decltype(arg)> auto&& f,
+        auto&&... fs
+    ) const
+    { return FFWD(f, arg); }
+
+    template<class>
+    decltype(auto) run(
+        running_arg<C> auto&& arg,
+        running_step<C, decltype(arg)> auto&& f
+    ) const
+    { return FFWD(f, arg); }
+
+    template<class>
+    decltype(auto) run(
+        running_arg<C> auto&& arg,
+        running_step<C, decltype(arg)> auto&& f,
+        inappropriate_step<decltype(FFWD(f, arg))> auto& g,
+        auto&&... fs
+    ) const
+    { return FFWD(f, arg); }
+
+    // продолжаем по цепочке
+    template<class>
+    decltype(auto) run(
+        running_arg<C> auto&& arg,
+        running_step<C, decltype(arg)> auto&& f,
+        appropriate_step<decltype(FFWD(f, arg))> auto& g,
+        auto&&... fs
+    ) const
+    { return run<decltype(FFWD(f, arg))>(FFWD(f, arg), FWD(g), FWD(fs)...); }
+};
+
+} // namespace seq_helpers
+
+template<CRITERIA C> constexpr auto run_sequence = seq_helpers::run_sequence<C>{};
+
+template<CRITERIA C> constexpr auto carry_sequence = [](auto... fs) {
+    return [fs...](auto&& a) -> decltype(auto) {
+        return run_sequence<C>(FWD(a), fs...);
+    };
+};
+
+constexpr auto run_simple_sequence = run_sequence<RejectAll>;
+constexpr auto carry_simple_sequence = carry_sequence<RejectAll>;
