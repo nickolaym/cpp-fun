@@ -317,6 +317,8 @@ TEST(sequence, without_stop_criteria) {
     auto f = [&count](auto* p) { ++count; return *p; };
     auto fff = carry_simple_sequence(f, f, f);
 
+    static_assert(Callable<decltype(f)>);
+
     static_assert(std::is_same_v<decltype(fff( (int)0 )), int&&>);
     static_assert(std::is_same_v<decltype(fff( (int*)nullptr )), int>);
     static_assert(std::is_same_v<decltype(fff( (int**)nullptr )), int>);

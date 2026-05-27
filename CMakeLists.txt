@@ -23,5 +23,6 @@ function(add_test_executable name)
 endfunction()
 
 
+add_test_executable(test_callable_concept single-files/callable_concept.cpp)
 add_test_executable(test_compose single-files/compose.cpp)
 add_test_executable(test_criteria_from_conctpt single-files/criteria_from_concept.cpp)

@@ -4,6 +4,8 @@
 #include <utility>
 #include <concepts>
 
+#include "callable_concept.h"
+
 // спасибо rg45 @ rsdn.ru
 
 #define FWD(a) std::forward<decltype(a)>(a)
@@ -37,12 +39,12 @@ concept not_fits_criteria = !C<T>::value;
 namespace alt_helpers {
 
 template<class F, CRITERIA C, class A>
-concept appropriate_alternative = fits_criteria<std::invoke_result_t<F, A>, C>;
+concept appropriate_alternative = Callable<F> && fits_criteria<std::invoke_result_t<F, A>, C>;
 // 1) можно вызвать
 // 2) и результат подходит под критерий остановки
 
 template<class F, CRITERIA C, class A>
-concept inappropriate_alternative = !appropriate_alternative<F, C, A>;
+concept inappropriate_alternative = Callable<F> && !appropriate_alternative<F, C, A>;
 // или нельзя вызвать, или результат неподходящий
 
 template<class...> struct typelist {};
@@ -54,17 +56,17 @@ template<class...> struct typelist {};
 // и это можно диагностировать через !requires
 // или через std::bool_constant, от которого он унаследован.
 
-template<CRITERIA C, class A, class RejectedTL, class... Fs>
+template<CRITERIA C, class A, class RejectedTL, Callable... Fs>
 struct resolver;
 
-template<CRITERIA C, class A, class... Rs>
+template<CRITERIA C, class A, Callable... Rs>
 struct resolver<C, A, typelist<Rs...>> // нет больше функций
 : std::false_type
 {
     // constexpr A operator()(A a, Rs...) const { return a; }
 };
 
-template<CRITERIA C, class A, class... Rs, appropriate_alternative<C, A> F, class... Gs>
+template<CRITERIA C, class A, Callable... Rs, appropriate_alternative<C, A> F, Callable... Gs>
 struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
 : std::true_type
 {
@@ -78,15 +80,15 @@ struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
 : resolver<C, A, typelist<Rs..., F>, Gs...> {};
 
 template<CRITERIA C> struct run_alternatives {
-    constexpr auto get_resolver(auto&& a, auto&&... fs) const {
+    constexpr auto get_resolver(auto&& a, Callable auto&&... fs) const {
         return resolver<C, decltype(a), typelist<>, decltype(fs)...>{};
     }
 
-    constexpr bool resolved(auto&& a, auto&&... fs) const {
+    constexpr bool resolved(auto&& a, Callable auto&&... fs) const {
         return get_resolver(FWD(a), FWD(fs)...).value;
     }
 
-    constexpr decltype(auto) operator()(auto&& a, auto&&... fs) const
+    constexpr decltype(auto) operator()(auto&& a, Callable auto&&... fs) const
     RETURN_IF_RESOLVED( get_resolver(FWD(a), FWD(fs)...)(FWD(a), FWD(fs)...) )
 };
 
@@ -96,7 +98,7 @@ constexpr auto fallback_alternative = [](auto&& a) -> decltype(auto) { return FW
 
 template<CRITERIA C> constexpr alt_helpers::run_alternatives<C> run_alternatives;
 
-template<CRITERIA C> constexpr auto carry_alternatives = [](auto&&... fs) {
+template<CRITERIA C> constexpr auto carry_alternatives = [](Callable auto&&... fs) {
     return [... fs = FWD(fs)](auto&& a)
     -> decltype(auto)
     RETURN_IF_RESOLVED( (run_alternatives<C>(FWD(a), fs...)) );
@@ -113,19 +115,19 @@ namespace seq_helpers {
 
 // если аргумент удовлетворяет критерию остановки, то останавливаемся
 template<class T, CRITERIA C>
-concept stopping_arg = fits_criteria<std::remove_cvref_t<T>, C>;
+concept stopping_arg = fits_criteria<std::decay_t<T>, C>;
 
 // если не удовлетворяет - пытаемся продолжить
 template<class T, CRITERIA C>
-concept running_arg = not_fits_criteria<std::remove_cvref_t<T>, C>;
+concept running_arg = not_fits_criteria<std::decay_t<T>, C>;
 
 // неподходящий шаг
 template<class F, class A>
-concept inappropriate_step = !std::invocable<F, A>;
+concept inappropriate_step = Callable<F> && !std::invocable<F, A>;
 
 // подходящий шаг
 template<class F, class A>
-concept appropriate_step = std::invocable<F, A>;
+concept appropriate_step = Callable<F> && std::invocable<F, A>;
 
 // остановка сразу после шага
 template<class F, CRITERIA C, class A>
@@ -137,7 +139,7 @@ concept running_step = running_arg<std::invoke_result_t<F, A>, C>;
 
 template<CRITERIA C>
 struct run_sequence {
-    decltype(auto) operator()(auto&& arg, auto&&... fs) const {
+    decltype(auto) operator()(auto&& arg, Callable auto&&... fs) const {
         return run<decltype(arg)>(FWD(arg), FWD(fs)...);
     }
 
@@ -148,7 +150,7 @@ struct run_sequence {
 
     // остановка на аргументе
     template<class Arg>
-    Arg run(stopping_arg<C> auto&& arg, auto&&... fs) const
+    Arg run(stopping_arg<C> auto&& arg, Callable auto&&... fs) const
     { return FWD(arg); }
 
     template<class Arg>
@@ -203,7 +205,7 @@ struct run_sequence {
 
 template<CRITERIA C> constexpr auto run_sequence = seq_helpers::run_sequence<C>{};
 
-template<CRITERIA C> constexpr auto carry_sequence = [](auto&&... fs) {
+template<CRITERIA C> constexpr auto carry_sequence = [](Callable auto&&... fs) {
     return [... fs = FWD(fs)](auto&& a) -> decltype(auto) {
         return run_sequence<C>(FWD(a), fs...);
     };
