@@ -145,6 +145,28 @@ TEST(alternatives, association) {
     }(int_tag<0>{});
 }
 
+TEST(alternatives, stresstest) {
+    const auto z = make_echo<0>();
+    const auto o = make_echo<1>();
+    const auto t = make_echo<2>();
+    const auto f = carry_simple_alternatives(
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        o,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        z,z,z,z,z, z,z,z,z,z,
+        t
+    );
+    f(int_tag<1>{});
+    f(int_tag<2>{});
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Sequence
 
