@@ -96,8 +96,8 @@ constexpr auto fallback_alternative = [](auto&& a) -> decltype(auto) { return FW
 
 template<CRITERIA C> constexpr alt_helpers::run_alternatives<C> run_alternatives;
 
-template<CRITERIA C> constexpr auto carry_alternatives = [](auto... fs) {
-    return [fs...](auto&& a)
+template<CRITERIA C> constexpr auto carry_alternatives = [](auto&&... fs) {
+    return [... fs = FWD(fs)](auto&& a)
     -> decltype(auto)
     RETURN_IF_RESOLVED( (run_alternatives<C>(FWD(a), fs...)) );
 };
@@ -203,8 +203,8 @@ struct run_sequence {
 
 template<CRITERIA C> constexpr auto run_sequence = seq_helpers::run_sequence<C>{};
 
-template<CRITERIA C> constexpr auto carry_sequence = [](auto... fs) {
-    return [fs...](auto&& a) -> decltype(auto) {
+template<CRITERIA C> constexpr auto carry_sequence = [](auto&&... fs) {
+    return [... fs = FWD(fs)](auto&& a) -> decltype(auto) {
         return run_sequence<C>(FWD(a), fs...);
     };
 };
