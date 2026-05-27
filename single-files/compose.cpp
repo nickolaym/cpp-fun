@@ -314,7 +314,10 @@ TEST(sequence, chain_of_references) {
 
 TEST(sequence, without_stop_criteria) {
     int count = 0;
-    auto f = [&count](auto* p) { ++count; return *p; };
+    auto f = [&count]<class T>(T* p) {
+        ++count;
+        return (T)0;
+    };
     auto fff = carry_simple_sequence(f, f, f);
 
     static_assert(Callable<decltype(f)>);
