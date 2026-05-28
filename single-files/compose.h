@@ -83,26 +83,32 @@ struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
 
 #endif
 
-// A and F are explicit, ideal references
-template<CRITERIA C, class A, Callable F>
-struct fun {
+template<class F> struct funref {
     F f;
-    static constexpr bool value = appropriate_alternative<F, C, A>;
+};
 
-    constexpr auto operator || (auto next) const {
-        if constexpr (value)
-            return *this;
-        else
-            return next;
-    }
+template<Callable F> struct solution {
+    static constexpr bool value = true;
+    F f; // ideal reference
 
-    constexpr decltype(auto) operator()(A a) const requires value {
-        return FWD(f)(FWD(a));
+    template<class G>
+    constexpr decltype(auto) operator || (funref<G>) const { return *this; }
+
+    constexpr decltype(auto) operator()(auto&& a) const {
+        return FFWD(f, a);
     }
 };
 
-struct no_more {
+template<CRITERIA C, class A> struct seed {
     static constexpr bool value = false;
+
+    template<class F>
+    constexpr decltype(auto) operator || (const funref<F>& ff) const {
+        if constexpr (appropriate_alternative<F, C, A>)
+            return solution<F>{FWD(ff.f)};
+        else
+            return *this;
+    }
 };
 
 template<CRITERIA C> struct run_alternatives {
@@ -111,7 +117,7 @@ template<CRITERIA C> struct run_alternatives {
     // }
 
     constexpr auto get_alternative(auto&& a, Callable auto&&... fs) const {
-        return ( fun<C, decltype(a), decltype(fs)>{FWD(fs)} || ... || no_more{} );
+        return ( seed<C, decltype(a)>{} || ... || funref<decltype(fs)>{FWD(fs)} );
     }
 
     constexpr bool resolved(auto&& a, Callable auto&&... fs) const {
