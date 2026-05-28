@@ -9,7 +9,7 @@ TEST(alternatives, no_fallback) {
 
     int x = 123;
 
-    constexpr auto res = alt_helpers::run_alternatives<AcceptAll>{}.get_resolver(x);
+    constexpr auto res = alt_helpers::run_alternatives<AcceptAll>{}.get_alternative(x);
     static_assert(!res.value);
 
     // requires failure is not an error in template context only!

@@ -47,6 +47,8 @@ template<class F, CRITERIA C, class A>
 concept inappropriate_alternative = Callable<F> && !appropriate_alternative<F, C, A>;
 // или нельзя вызвать, или результат неподходящий
 
+
+#if 0
 template<class...> struct typelist {};
 
 // resolver<...>{}(arg, f1, f2, ..., fk, ..., fn)
@@ -75,24 +77,59 @@ struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
     }
 };
 
-template<CRITERIA C, class A, class... Rs, inappropriate_alternative<C, A> F, class... Gs>
+template<CRITERIA C, class A, Callable... Rs, inappropriate_alternative<C, A> F, Callable... Gs>
 struct resolver<C, A, typelist<Rs...>, F, Gs...> // F(A) fits to C
 : resolver<C, A, typelist<Rs..., F>, Gs...> {};
 
+#endif
+
+// A and F are explicit, ideal references
+template<CRITERIA C, class A, Callable F>
+struct fun {
+    F f;
+    static constexpr bool value = appropriate_alternative<F, C, A>;
+
+    constexpr auto operator || (auto next) const {
+        if constexpr (value)
+            return *this;
+        else
+            return next;
+    }
+
+    constexpr decltype(auto) operator()(A a) const requires value {
+        return FWD(f)(FWD(a));
+    }
+};
+
+struct no_more {
+    static constexpr bool value = false;
+};
+
 template<CRITERIA C> struct run_alternatives {
-    constexpr auto get_resolver(auto&& a, Callable auto&&... fs) const {
-        return resolver<C, decltype(a), typelist<>, decltype(fs)...>{};
+    // constexpr auto get_resolver(auto&& a, Callable auto&&... fs) const {
+    //     return resolver<C, decltype(a), typelist<>, decltype(fs)...>{};
+    // }
+
+    constexpr auto get_alternative(auto&& a, Callable auto&&... fs) const {
+        return ( fun<C, decltype(a), decltype(fs)>{FWD(fs)} || ... || no_more{} );
     }
 
     constexpr bool resolved(auto&& a, Callable auto&&... fs) const {
-        return get_resolver(FWD(a), FWD(fs)...).value;
+        // return get_resolver(FWD(a), FWD(fs)...).value;
+        return get_alternative(FWD(a), FWD(fs)...).value;
     }
 
     constexpr decltype(auto) operator()(auto&& a, Callable auto&&... fs) const
-    RETURN_IF_RESOLVED( get_resolver(FWD(a), FWD(fs)...)(FWD(a), FWD(fs)...) )
+    RETURN_IF_RESOLVED(
+        // get_resolver(FWD(a), FWD(fs)...)(FWD(a), FWD(fs)...)
+        get_alternative(FWD(a), FWD(fs)...)(FWD(a))
+    )
 };
 
 } // namespace alt_helpers
+
+
+
 
 constexpr auto fallback_alternative = [](auto&& a) -> decltype(auto) { return FWD(a); };
 
